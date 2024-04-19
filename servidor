@@ -3,6 +3,8 @@ import asyncio
 from tcp import Servidor
 import re
 
+nicknames = {}
+
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
 
@@ -24,10 +26,32 @@ def dados_recebidos(conexao, dados):
         for i in range(0,(len(mensagens) - 1)):
             if b'PING' in mensagens[i]:
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
+            if b'NICK' in mensagens[i]:
+                if validar_nome(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')):
+                    if mensagens[i].split(b' ', 1)[1].rstrip(b'\r') in nicknames:
+                        conexao.enviar(b":server 433 * %s :Nickname is already in use", mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                    else:
+                        nicknames[(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')) ] =  conexao
+
+                        conexao.enviar(b':server 001 %s :Welcome\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                        conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                else:
+                    conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
 
     if(conexao.dadosResiduais[-1] == b'\n'):
         if b'PING' in mensagens[i]:
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
+        if b'NICK' in mensagens[i]:
+            if validar_nome(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')):
+                if mensagens[i].split(b' ', 1)[1].rstrip(b'\r') in nicknames:
+                    conexao.enviar(b":server 433 * %s :Nickname is already in use", mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                else:
+                    nicknames[mensagens[i].split(b' ', 1)[1].rstrip(b'\r')] =  conexao
+
+                    conexao.enviar(b':server 001 %s :Welcome\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                    conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+            else:
+                conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
     else:
         conexao.dadosResiduais = mensagens[-1]
 
