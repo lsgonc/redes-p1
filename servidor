@@ -38,6 +38,14 @@ def trata_nick(conexao, nickname):
     else:
         conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % nickname)
 
+def priv_message(conexao, nickname, mensagem):
+    remetente = list(nicknames.keys())[list(nicknames.values()).index(conexao)] #pega o nick do remetente
+    
+    #se o destinatario EXISTIR => se não, n faz nada
+    if nickname in nicknames:
+        destinario = nicknames[nickname] #conexao do destinatario
+        destinario.enviar(b':' + remetente + b' PRIVMSG ' + nickname + b' :' + mensagem + b'\r\n')
+
 def dados_recebidos(conexao, dados):
     if dados == b'':
         return sair(conexao)
@@ -52,13 +60,17 @@ def dados_recebidos(conexao, dados):
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
             if b'NICK' in mensagens[i]:
                 trata_nick(conexao, mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+            if b'PRIVMSG' in mensagens[i]:
+                priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(), mensagens[i].split(b' ')[2].strip(b':\r'))
                 
 
     if(conexao.dadosResiduais[-1] == b'\n'):
         if b'PING' in mensagens[i]:
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
         if b'NICK' in mensagens[i]:
-            trata_nick(conexao, mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+            trata_nick(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r'))
+        if b'PRIVMSG' in mensagens[i]:
+            priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(),mensagens[i].split(b' ')[2].strip(b':\r'))
     else:
         conexao.dadosResiduais = mensagens[-1]
 
