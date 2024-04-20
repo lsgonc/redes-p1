@@ -7,13 +7,35 @@ import textwrap
 nicknames = {}
 canais = {}
 
+#[user1] = [canal1,canal2,canal2] => guarda todos os canais que o usuario está
+nicknames_canais = {}
+
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
 
 
 def sair(conexao):
-    print(conexao, 'conexão fechada')
+
+    nickname = ''
+    
+
+    #conexao foi registrada => possui NICKNAME
+    if conexao in nicknames.values():
+        nickname = list(nicknames.keys())[list(nicknames.values()).index(conexao)]
+
+        #usuario conectado a algum canal
+        if nickname in nicknames_canais:
+            for i in nicknames_canais[nickname]:
+                canais[i].remove(conexao)
+                for j in canais[i]:
+                    j.enviar(b':%s QUIT :Connection closed\r\n' % nickname)
+
+        del nicknames[nickname]
+        
+        
+    
     conexao.fechar()
+    
 
 def trata_nick(conexao, nickname):
     if validar_nome(nickname):
@@ -67,9 +89,20 @@ def trata_canal(conexao, nomeCanal):
 
         nickname = list(nicknames.keys())[list(nicknames.values()).index(conexao)] #pega o nick de quem entrou
 
+        
+
         #valida o nome do canal sem o #
         if validar_nome(nomeCanal):
             nome_completo = b'#'+nomeCanal #recria o nome completo do canal
+            
+            #armazena todos os canais que o usuario faz parte
+            todos_canais = list()
+            todos_canais.append(nome_completo)
+            
+            if nickname in nicknames_canais:
+                nicknames_canais[nickname].append(nome_completo)
+            else:
+                nicknames_canais[nickname] = todos_canais
 
             #o canal já existe => coloca a conexao ao canal e envia que o usuario conectou para todos
             if(nome_completo in canais):
@@ -106,12 +139,17 @@ def trata_canal(conexao, nomeCanal):
 
 
 def trata_part(conexao, canal):
-    print(b"CANAL DO PART: "+canal)
     nickname = list(nicknames.keys())[list(nicknames.values()).index(conexao)]
+
+    canal_byte = b''+canal
+
+
     for i in canais[canal]:
         i.enviar(b':%s PART %s\r\n' %(nickname,canal) )
 
     canais[canal].remove(conexao) #tira a conexao do canal específico
+    nicknames_canais[nickname].remove(canal_byte)
+
        
 
 def dados_recebidos(conexao, dados):
