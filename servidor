@@ -30,6 +30,8 @@ def sair(conexao):
                 for j in canais[i]:
                     j.enviar(b':%s QUIT :Connection closed\r\n' % nickname)
 
+            del nicknames_canais[nickname]
+
         del nicknames[nickname]
         
         
@@ -123,6 +125,8 @@ def trata_canal(conexao, nomeCanal):
             for i in canais[nome_completo]:
                 membros.append(list(nicknames.keys())[list(nicknames.values()).index(i)]) #adiciona o nickname de todos os membros nessa lista
 
+            membros.sort()
+
             #cria uma string dos membros => pra printar na mensagem
             membros_string = " ".join(str(element) for element in membros).translate({ord(i): None for i in "b'"})
 
@@ -130,9 +134,10 @@ def trata_canal(conexao, nomeCanal):
             wrapped = textwrap.wrap(membros_string,512)
             
             for i in wrapped:
+                print("I:", i)
                 conexao.enviar(b':server 353 %s = %s :%s\r\n' % (nickname, nome_completo,bytes(i,"utf-8")))
 
-            conexao.enviar(b':server 366 %s %s :End of /NAMES list\r\n' % (nickname, nome_completo))
+            conexao.enviar(b':server 366 %s %s :End of /NAMES list.\r\n' % (nickname, nome_completo))
         
         else:
             conexao.enviar(b':server 403 %s :No such channel\r\n' % (b'#'+nomeCanal))
