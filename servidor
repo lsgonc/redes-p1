@@ -14,6 +14,30 @@ def sair(conexao):
     conexao.fechar()
 
 
+def trata_nick(conexao, nickname):
+    if validar_nome(nickname):
+        if nickname.lower() in nicknames:
+            if conexao in nicknames.values():
+                nickAtual = list(nicknames.keys())[list(nicknames.values()).index(conexao)]
+                conexao.enviar(b":server 433 %s %s :Nickname is already in use\r\n"  % (nickAtual ,nickname))
+            else:
+                conexao.enviar(b":server 433 * %s :Nickname is already in use\r\n" % nickname)
+        else:
+            #já possui um nick => remove o antigo, coloca um novo
+            if conexao in nicknames.values():
+                nickAtual = list(nicknames.keys())[list(nicknames.values()).index(conexao)]
+                del nicknames[nickAtual] #deleta o nick antigo 
+                nicknames[(nickname).lower().rstrip(b'\r') ] =  conexao #coloca o novo
+                conexao.enviar(b":%s NICK %s\r\n" % (nickAtual,nickname))
+                
+            #não tem um nick => só atribui o [nick]=conexao
+            else:
+                nicknames[(nickname).lower().rstrip(b'\r') ] =  conexao
+                conexao.enviar(b':server 001 %s :Welcome\r\n' % nickname)
+                conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % nickname)
+    else:
+        conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % nickname)
+
 def dados_recebidos(conexao, dados):
     if dados == b'':
         return sair(conexao)
@@ -27,31 +51,14 @@ def dados_recebidos(conexao, dados):
             if b'PING' in mensagens[i]:
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
             if b'NICK' in mensagens[i]:
-                if validar_nome(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')):
-                    if mensagens[i].split(b' ', 1)[1].rstrip(b'\r') in nicknames:
-                        conexao.enviar(b":server 433 * %s :Nickname is already in use", mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-                    else:
-                        nicknames[(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')) ] =  conexao
-
-                        conexao.enviar(b':server 001 %s :Welcome\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-                        conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-                else:
-                    conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                trata_nick(conexao, mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+                
 
     if(conexao.dadosResiduais[-1] == b'\n'):
         if b'PING' in mensagens[i]:
                 conexao.enviar(b':server PONG server :' + mensagens[i].split(b' ', 1)[1] + b'\n')
         if b'NICK' in mensagens[i]:
-            if validar_nome(mensagens[i].split(b' ', 1)[1].rstrip(b'\r')):
-                if mensagens[i].split(b' ', 1)[1].rstrip(b'\r') in nicknames:
-                    conexao.enviar(b":server 433 * %s :Nickname is already in use", mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-                else:
-                    nicknames[mensagens[i].split(b' ', 1)[1].rstrip(b'\r')] =  conexao
-
-                    conexao.enviar(b':server 001 %s :Welcome\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-                    conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
-            else:
-                conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
+            trata_nick(conexao, mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
     else:
         conexao.dadosResiduais = mensagens[-1]
 
