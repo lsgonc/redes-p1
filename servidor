@@ -2,8 +2,10 @@
 import asyncio
 from tcp import Servidor
 import re
+import textwrap
 
 nicknames = {}
+canais = {}
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -12,7 +14,6 @@ def validar_nome(nome):
 def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
-
 
 def trata_nick(conexao, nickname):
     if validar_nome(nickname):
@@ -39,12 +40,72 @@ def trata_nick(conexao, nickname):
         conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % nickname)
 
 def priv_message(conexao, nickname, mensagem):
-    remetente = list(nicknames.keys())[list(nicknames.values()).index(conexao)] #pega o nick do remetente
-    
-    #se o destinatario EXISTIR => se não, n faz nada
-    if nickname in nicknames:
-        destinario = nicknames[nickname] #conexao do destinatario
-        destinario.enviar(b':' + remetente + b' PRIVMSG ' + nickname + b' :' + mensagem + b'\r\n')
+
+    #só pode mandar mensagem se já tiver registrado
+    if conexao in nicknames.values():
+        remetente = list(nicknames.keys())[list(nicknames.values()).index(conexao)] #pega o nick do remetente
+        
+
+        if b'#' in nickname:
+            #pode mandar msg pro canal apenas se estiver nele
+            if conexao in canais[nickname]:
+                for i in canais[nickname]:
+                    #não manda pra ele próprio
+                    if(i!=conexao):
+                        i.enviar(b':' + remetente + b' PRIVMSG ' + nickname + b' :' + mensagem + b'\r\n')
+        else:
+            #se o destinatario EXISTIR => se não, n faz nada
+            if nickname in nicknames:
+                destinario = nicknames[nickname] #conexao do destinatario
+                destinario.enviar(b':' + remetente + b' PRIVMSG ' + nickname + b' :' + mensagem + b'\r\n')
+
+def trata_canal(conexao, nomeCanal):
+
+    if conexao in nicknames.values():
+        lista = list()
+        lista.append(conexao)
+
+        nickname = list(nicknames.keys())[list(nicknames.values()).index(conexao)] #pega o nick de quem entrou
+
+        #valida o nome do canal sem o #
+        if validar_nome(nomeCanal):
+            nome_completo = b'#'+nomeCanal #recria o nome completo do canal
+
+            #o canal já existe => coloca a conexao ao canal e envia que o usuario conectou para todos
+            if(nome_completo in canais):
+                canais[nome_completo].append(conexao)
+            #se não existe => cria o canal com uma lista (com a unica conexao)
+            else:
+                canais[nome_completo] = lista
+
+
+            
+
+            #envia mensagem para todos que o usuário entrou no canal
+            for i in canais[nome_completo]:
+                i.enviar(b":%s JOIN :%s\r\n" %(nickname,nome_completo))
+
+            #server 353 => mostra para o usuario que conectou no canal todos os membros
+            membros = []
+            for i in canais[nome_completo]:
+                membros.append(list(nicknames.keys())[list(nicknames.values()).index(i)]) #adiciona o nickname de todos os membros nessa lista
+
+            #cria uma string dos membros => pra printar na mensagem
+            membros_string = " ".join(str(element) for element in membros).translate({ord(i): None for i in "b'"})
+
+            #quebra a string em no máximo 512 caracteres
+            wrapped = textwrap.wrap(membros_string,512)
+            
+            for i in wrapped:
+                conexao.enviar(b':server 353 %s = %s :%s\r\n' % (nickname, nome_completo,bytes(i,"utf-8")))
+
+            conexao.enviar(b':server 366 %s %s :End of /NAMES list\r\n' % (nickname, nome_completo))
+        
+        else:
+            conexao.enviar(b':server 403 %s :No such channel\r\n' % (b'#'+nomeCanal))
+
+
+       
 
 def dados_recebidos(conexao, dados):
     if dados == b'':
@@ -61,8 +122,9 @@ def dados_recebidos(conexao, dados):
             if b'NICK' in mensagens[i]:
                 trata_nick(conexao, mensagens[i].split(b' ', 1)[1].rstrip(b'\r'))
             if b'PRIVMSG' in mensagens[i]:
-                priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(), mensagens[i].split(b' ')[2].strip(b':\r'))
-                
+                priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(), mensagens[i].split(b' ')[2].strip(b':\r\n'))
+            if b'JOIN' in mensagens[i]:
+                  trata_canal(conexao, mensagens[i].split(b' ', 1)[1].strip(b'#\r\n').lower())
 
     if(conexao.dadosResiduais[-1] == b'\n'):
         if b'PING' in mensagens[i]:
@@ -70,7 +132,9 @@ def dados_recebidos(conexao, dados):
         if b'NICK' in mensagens[i]:
             trata_nick(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r'))
         if b'PRIVMSG' in mensagens[i]:
-            priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(),mensagens[i].split(b' ')[2].strip(b':\r'))
+            priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(),mensagens[i].split(b' ')[2].strip(b':\r\n'))
+        if b'JOIN' in mensagens[i]:
+                  trata_canal(conexao, mensagens[i].split(b' ', 1)[1].strip(b'#\r\n').lower())
     else:
         conexao.dadosResiduais = mensagens[-1]
 
