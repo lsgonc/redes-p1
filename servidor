@@ -105,6 +105,13 @@ def trata_canal(conexao, nomeCanal):
             conexao.enviar(b':server 403 %s :No such channel\r\n' % (b'#'+nomeCanal))
 
 
+def trata_part(conexao, canal):
+    print(b"CANAL DO PART: "+canal)
+    nickname = list(nicknames.keys())[list(nicknames.values()).index(conexao)]
+    for i in canais[canal]:
+        i.enviar(b':%s PART %s\r\n' %(nickname,canal) )
+
+    canais[canal].remove(conexao) #tira a conexao do canal específico
        
 
 def dados_recebidos(conexao, dados):
@@ -125,6 +132,8 @@ def dados_recebidos(conexao, dados):
                 priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(), mensagens[i].split(b' ')[2].strip(b':\r\n'))
             if b'JOIN' in mensagens[i]:
                   trata_canal(conexao, mensagens[i].split(b' ', 1)[1].strip(b'#\r\n').lower())
+            if b'PART' in mensagens[i]:
+                  trata_part(conexao, mensagens[i].split(b' ')[1].strip(b'\r\n').lower())
 
     if(conexao.dadosResiduais[-1] == b'\n'):
         if b'PING' in mensagens[i]:
@@ -134,7 +143,9 @@ def dados_recebidos(conexao, dados):
         if b'PRIVMSG' in mensagens[i]:
             priv_message(conexao, mensagens[i].split(b' ')[1].rstrip(b'\r').lower(),mensagens[i].split(b' ')[2].strip(b':\r\n'))
         if b'JOIN' in mensagens[i]:
-                  trata_canal(conexao, mensagens[i].split(b' ', 1)[1].strip(b'#\r\n').lower())
+            trata_canal(conexao, mensagens[i].split(b' ', 1)[1].strip(b'\r\n').lower())
+        if b'PART' in mensagens[i]:
+            trata_part(conexao, mensagens[i].split(b' ')[1].strip(b'\r\n').lower())
     else:
         conexao.dadosResiduais = mensagens[-1]
 
